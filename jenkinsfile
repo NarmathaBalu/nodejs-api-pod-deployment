@@ -28,7 +28,7 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh '/usr/local/npm install'
+                sh '/usr/local/bin/npm install'
             }
         }
 
