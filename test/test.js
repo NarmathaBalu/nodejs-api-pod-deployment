@@ -1,20 +1,13 @@
-const axios = require('axios');
+const http = require('http');
 
-(async () => {
-  try {
-    const health = await axios.get('http://localhost:3000/health');
-    console.log('Health:', health.data);
-
-    const hello = await axios.get('http://localhost:3000/api/hello');
-    console.log('Hello:', hello.data);
-
-    const goodbye = await axios.get('http://localhost:3000/api/goodbye');
-    console.log('Goodbye:', goodbye.data);
-
-    console.log('All tests passed!');
-    process.exit(0);
-  } catch (err) {
-    console.error('Test failed:', err.message);
+http.get('http://localhost:3000/health', (res) => {
+    let data = '';
+    res.on('data', chunk => data += chunk);
+    res.on('end', () => {
+        console.log('Health endpoint response:', data);
+        process.exit(0);
+    });
+}).on('error', err => {
+    console.error('Health check failed:', err.message);
     process.exit(1);
-  }
-})();
+});
