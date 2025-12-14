@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "nodejs-sample-api"
+        IMAGE_TAG = "latest"
+        CONTAINER_NAME = "nodejs-sample-api"
+    }
+
+    stages {
+
+        stage('Checkout Source') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/<YOUR_GITHUB_USERNAME>/nodejs-sample-api.git'
+            }
+        }
+
+        stage('Build Image with Podman') {
+            steps {
+                sh '''
+                  podman build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                '''
+            }
+        }
+
+        stage('Deploy API Locally') {
+            steps {
+                sh '''
+                  podman rm -f ${CONTAINER_NAME} || true
+                  podman run -d \
+                    --name ${CONTAINER_NAME} \
+                    -p 3000:3000 \
+                    ${IMAGE_NAME}:${IMAGE_TAG}
+                '''
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                  sleep 5
+                  curl http://localhost:3000/health
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Node.js API deployed successfully via Jenkins"
+        }
+        failure {
+            echo "❌ Deployment failed"
+        }
+    }
+}
