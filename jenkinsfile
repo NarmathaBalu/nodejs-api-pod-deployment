@@ -2,36 +2,59 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "nodejs-sample-api"
-        IMAGE_TAG = "latest"
-        CONTAINER_NAME = "nodejs-sample-api"
+        POD_NAME = "api-pod"
+        API_IMAGE = "nodejs-api:latest"
+        API_CONTAINER = "nodejs-api"
+        REDIS_CONTAINER = "redis"
+        API_PORT = 3000
     }
 
     stages {
-
-        stage('Checkout Source') {
+        stage('Checkout Code') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/<YOUR_GITHUB_USERNAME>/nodejs-sample-api.git'
+                git branch: 'main', url: 'https://github.com/NarmathaBalu/nodejs-api-pod-deployment.git'
             }
         }
 
-        stage('Build Image with Podman') {
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Build Node.js API Container') {
+            steps {
+                sh 'podman build -t ${API_IMAGE} .'
+            }
+        }
+
+        stage('Clean Previous Containers and Pod') {
             steps {
                 sh '''
-                  podman build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                # Remove previous pod if exists
+                podman pod rm -f ${POD_NAME} || true
+
+                # Remove any leftover containers
+                podman rm -f ${API_CONTAINER} || true
+                podman rm -f ${REDIS_CONTAINER} || true
                 '''
             }
         }
 
-        stage('Deploy API Locally') {
+        stage('Create Pod') {
+            steps {
+                sh 'podman pod create --name ${POD_NAME} -p ${API_PORT}:${API_PORT}'
+            }
+        }
+
+        stage('Run Containers in Pod') {
             steps {
                 sh '''
-                  podman rm -f ${CONTAINER_NAME} || true
-                  podman run -d \
-                    --name ${CONTAINER_NAME} \
-                    -p 3000:3000 \
-                    ${IMAGE_NAME}:${IMAGE_TAG}
+                # Run Node.js API in pod
+                podman run -d --pod ${POD_NAME} --name ${API_CONTAINER} ${API_IMAGE}
+
+                # Run Redis container in the same pod
+                podman run -d --pod ${POD_NAME} --name ${REDIS_CONTAINER} redis:alpine
                 '''
             }
         }
@@ -39,19 +62,23 @@ pipeline {
         stage('Health Check') {
             steps {
                 sh '''
-                  sleep 5
-                  curl http://localhost:3000/health
+                # Retry curl to ensure API is up
+                curl --retry 5 --retry-delay 2 http://localhost:${API_PORT}/health
+                curl http://localhost:${API_PORT}/api/hello
+                curl http://localhost:${API_PORT}/api/goodbye
                 '''
             }
         }
     }
 
     post {
-        success {
-            echo "✅ Node.js API deployed successfully via Jenkins"
-        }
-        failure {
-            echo "❌ Deployment failed"
+        always {
+            sh '''
+            # Clean up pod and containers after build
+            podman pod rm -f ${POD_NAME} || true
+            podman rm -f ${API_CONTAINER} || true
+            podman rm -f ${REDIS_CONTAINER} || true
+            '''
         }
     }
 }
