@@ -73,22 +73,19 @@ pipeline {
             steps {
                 sh '''
                 # Retry curl to ensure API is up
+                echo "Checking API endpoints..."
                 curl --retry 5 --retry-delay 2 http://localhost:${API_PORT}/health
                 curl http://localhost:${API_PORT}/api/hello
                 curl http://localhost:${API_PORT}/api/goodbye
                 '''
             }
         }
+        stage('functional test') {
+            steps {
+                sh 'npm test'
+            }
+        }
+
     }
 
-    post {
-        always {
-            sh '''
-            # Clean up pod and containers after build
-            /opt/homebrew/bin/podman pod rm -f ${POD_NAME} || true
-            /opt/homebrew/bin/podman rm -f ${API_CONTAINER} || true
-            /opt/homebrew/bin/podman rm -f ${REDIS_CONTAINER} || true
-            '''
-        }
-    }
 }
